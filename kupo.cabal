@@ -288,6 +288,7 @@ test-suite unit
       Test.Kupo.App.HttpSpec
       Test.Kupo.App.MailboxSpec
       Test.Kupo.AppSpec
+      Test.Kupo.App.ChainSync.HydraSpec
       Test.Kupo.Data.CardanoSpec
       Test.Kupo.Data.DatabaseSpec
       Test.Kupo.Data.Generators
@@ -297,7 +298,6 @@ test-suite unit
       Test.Kupo.Data.Http.OrderMatchesBySpec
       Test.Kupo.Data.Http.SlotRangeSpec
       Test.Kupo.Data.OgmiosSpec
-      Test.Kupo.Data.HydraSpec
       Test.Kupo.Data.Pattern.Fixture
       Test.Kupo.Data.PatternSpec
       Test.Kupo.Data.UtxoConstraint

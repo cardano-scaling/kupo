@@ -3,7 +3,7 @@
 -- file, You can obtain one at http://mozilla.org/MPL/2.0/.
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Test.Kupo.Data.HydraSpec
+module Test.Kupo.App.ChainSync.HydraSpec
     ( spec
     ) where
 
