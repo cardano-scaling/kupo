@@ -83,7 +83,7 @@ mkHydraBlock number txs = do
         ( Tip slotNo headerHash blockNo
         , PartialBlock
             { blockPoint = BlockPoint slotNo headerHash
-            , blockBody  = txs
+            , blockBody  = toList txs
             }
         )
 
@@ -216,8 +216,8 @@ decodeSnapshotConfirmed :: Json.Object -> Json.Parser Snapshot
 decodeSnapshotConfirmed o = do
     snapshot <- o .: "snapshot"
     number <- snapshot .: "snapshotNumber"
-    confirmedTransactionIds <- snapshot .: "confirmedTransactions" >>= mapM decodeTransactionId
+    confirmedTransactionIds' <- snapshot .: "confirmedTransactions" >>= mapM decodeTransactionId
     pure Snapshot
         { number
-        , confirmedTransactionIds
+        , confirmedTransactionIds = fromList confirmedTransactionIds'
         }

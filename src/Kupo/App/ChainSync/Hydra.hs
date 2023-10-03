@@ -57,7 +57,7 @@ runChainSyncClient
     -> m IntersectionNotFoundException
 runChainSyncClient mailbox beforeMainLoop _pts ws = do
     beforeMainLoop
-    TransactionStore{pushTx, popTxById} <- newTransactionStore
+    TransactionStore{pushTx, popTxByIds} <- newTransactionStore
     forever $ do
         WS.receiveJson ws decodeHydraMessage >>= \case
             HeadIsOpen{genesisTxs} ->
@@ -65,7 +65,7 @@ runChainSyncClient mailbox beforeMainLoop _pts ws = do
             TxValid{tx} ->
                 pushTx tx
             SnapshotConfirmed{ snapshot = Snapshot { number, confirmedTransactionIds }} -> do
-                txs <- mapM popTxById confirmedTransactionIds
+                txs <- popTxByIds confirmedTransactionIds
                 atomically (putHighFrequencyMessage mailbox (mkHydraBlock number txs))
             SomethingElse -> pure ()
 
@@ -90,7 +90,7 @@ data TransactionStore m = TransactionStore
       pushTx :: PartialTransaction -> m ()
     , -- | Resolves a transaction id and removes it. Throws
       -- 'TransactionNotInStore' when not found.
-      popTxById :: MonadThrow m => TransactionId -> m PartialTransaction
+      popTxByIds :: MonadThrow m => [TransactionId] -> m [PartialTransaction]
     }
 
 newTransactionStore :: (Monad m, MonadSTM m, MonadThrow (STM m)) => m (TransactionStore m)
@@ -99,12 +99,13 @@ newTransactionStore = do
   pure
     TransactionStore
         { pushTx = \tx@PartialTransaction{id} -> atomically $ modifyTVar' txStore (Map.insert id tx)
-        , popTxById = \txId ->
+        , popTxByIds = \txIds ->
             atomically $ do
                 txMap <- readTVar txStore
-                case Map.lookup txId txMap of
-                  Nothing -> throwM $ TransactionNotInStore txId
-                  Just tx -> do
+                forM txIds $ \txId ->
+                  case Map.lookup txId txMap of
+                    Nothing -> throwM $ TransactionNotInStore txId
+                    Just tx -> do
                       writeTVar txStore (Map.delete txId txMap)
                       pure tx
         }

@@ -66,7 +66,7 @@ spec = parallel $ do
   context "TransactionStore" $ do
 
     prop "can retrieve transactions in any order" $ monadicIO $ do
-      TransactionStore{pushTx, popTxById} <- run newTransactionStore
+      TransactionStore{pushTx, popTxByIds} <- run newTransactionStore
       txs <- pick $ do
            txIns <- listOf1 genOutputReference
            evalStateT genPartialTransactions (Set.fromList txIns)
@@ -77,9 +77,9 @@ spec = parallel $ do
       shuffledTxs <- pick $ shuffle txsWithIds
       pure $
           forM_ shuffledTxs $ \(tx, txId) -> do
-              tx' <- popTxById txId
-              tx' `shouldBe` tx
-              popTxById txId `shouldThrow` \case
+              tx' <- popTxByIds [txId]
+              tx' `shouldBe` [tx]
+              popTxByIds [txId] `shouldThrow` \case
                   TransactionNotInStore txId' -> txId' == txId
 
 
