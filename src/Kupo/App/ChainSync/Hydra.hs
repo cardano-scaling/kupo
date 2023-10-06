@@ -6,6 +6,7 @@ module Kupo.App.ChainSync.Hydra
     ( connect
     , runChainSyncClient
     , newTransactionStore
+    , findLatestPoint
     , TransactionStore (..)
     , TransactionStoreException (..)
     ) where
@@ -26,8 +27,10 @@ import Kupo.Control.MonadSTM
     )
 import Kupo.Data.Cardano
     ( Point
+    , SlotNo (..)
     , Tip
     , TransactionId
+    , getPointSlotNo
     )
 import Kupo.Data.ChainSync
     ( IntersectionNotFoundException (..)
@@ -55,19 +58,41 @@ runChainSyncClient
     -> [Point]
     -> WS.Connection
     -> m IntersectionNotFoundException
-runChainSyncClient mailbox beforeMainLoop _pts ws = do
+runChainSyncClient mailbox beforeMainLoop pts ws = do
     beforeMainLoop
-    TransactionStore{pushTx, popTxByIds} <- newTransactionStore
+    txStore <- newTransactionStore
+    let mLatestPoint = findLatestPoint pts
     forever $ do
         WS.receiveJson ws decodeHydraMessage >>= \case
             HeadIsOpen{genesisTxs} ->
                 atomically (putHighFrequencyMessage mailbox (mkHydraBlock 0 genesisTxs))
             TxValid{tx} ->
-                pushTx tx
-            SnapshotConfirmed{ snapshot = Snapshot { number, confirmedTransactionIds }} -> do
-                txs <- popTxByIds confirmedTransactionIds
-                atomically (putHighFrequencyMessage mailbox (mkHydraBlock number txs))
+                -- TODO: Ideally we would not push txs into the store unless they come after last
+                -- recorded 'Point' but we don't have such knowledge at this code path since 'TxValid'
+                -- only contains 'PartialTransaction' which doesn't hold the notion of
+                -- blocks/slots. Maybe add current snapshot number to 'TxValid' in hydra-node or bring
+                -- back the transactions inside of 'SnapshotConfirmed' like what we had before?
+                pushTx txStore tx
+            SnapshotConfirmed{ snapshot = snapshot@Snapshot { number }} -> do
+                case mLatestPoint of
+                  Nothing -> sendToMailbox txStore snapshot
+                  Just lastRecordedPoint ->
+                     when (getPointSlotNo lastRecordedPoint < SlotNo number) $
+                         sendToMailbox txStore snapshot
             SomethingElse -> pure ()
+    where
+        sendToMailbox TransactionStore{popTxByIds} Snapshot { number, confirmedTransactionIds } = do
+           txs <- popTxByIds confirmedTransactionIds
+           atomically (putHighFrequencyMessage mailbox (mkHydraBlock number txs))
+
+-- | Potentially find the latest recorded 'Point' in a list. NOTE: blocks/slots are just snapshot
+-- numbers when it comes to Hydra Head protocol so this is why we can use 'getPointSlotNo' for
+-- comparison.
+findLatestPoint :: [Point] -> Maybe Point
+findLatestPoint = \case
+    [] -> Nothing
+    as -> listToMaybe $
+             sortBy (\a b -> compare (getPointSlotNo a) (getPointSlotNo b) ) as
 
 connect
     :: ConnectionStatusToggle IO
